@@ -14,6 +14,7 @@ import org.bukkit.block.Chest;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -24,7 +25,6 @@ import com.massivecraft.factions.Faction;
 import com.massivecraft.factions.FPlayer;
 import com.massivecraft.factions.Board;
 
-import net.minecraft.server.World;
 import net.sqdmc.factionshield.Shield;
 import net.sqdmc.factionshield.FactionShieldOwner;
 
@@ -38,9 +38,9 @@ public class ShieldListener implements Listener {
 	private HashMap<Integer, Integer> ShieldDurability = new HashMap<Integer, Integer>();
 	private HashMap<Integer, Timer> shieldTimer = new HashMap<Integer, Timer>();
 	
-	private Map<ShieldOwner, Shield> shields = new HashMap<ShieldOwner, Shield>();
-	private Map<Block, ShieldBase> blockShieldBase = new HashMap<Block, ShieldBase>();
-	private Map<Shield, ShieldOwner> sh = new HashMap<Shield, ShieldOwner>();
+	private HashMap<ShieldOwner, Shield> shields = new HashMap<ShieldOwner, Shield>();
+	private HashMap<Block, ShieldBase> blockShieldBase = new HashMap<Block, ShieldBase>();
+	//private Map<Shield, ShieldOwner> sh = new HashMap<Shield, ShieldOwner>();
 	
 	public ShieldListener(FactionShield plugin) {
 		this.plugin = plugin;
@@ -73,18 +73,23 @@ public class ShieldListener implements Listener {
 		
 		if (ShieldBlock.getType() == Material.SPONGE) {
 			
-			Block Sponge = (Block)ShieldBlock;
-			Shield shield = getShield(fshieldowner);
+			Block Sponge = (Block)ShieldBlock;	
 			
-			ShieldBase shieldbase = new ShieldBase(Sponge, (Sign)signBlock.getState(), shield, ShieldBlock.getWorld(),ShieldBlock.getX(),ShieldBlock.getY(),ShieldBlock.getZ());
-			
-			if (blockShieldBase != null && shieldbase != null){
-				if (blockShieldBase.containsKey(shieldbase)){
+			if (blockShieldBase != null){
+				//if (shield.getOwner().getId() == shields.get(fshieldowner).owner.getId()){
+				if (shields.containsKey(fshieldowner)){
+				//if (shields.equals(fshieldowner))
 					log.info("Already have a shield");
 					Sponge.breakNaturally();
 					return;
 				}
 			}
+			
+			Shield shield = getShield(fshieldowner);
+						
+			ShieldBase shieldbase = new ShieldBase(Sponge, (Sign)signBlock.getState(), shield, ShieldBlock.getWorld(),ShieldBlock.getX(),ShieldBlock.getY(),ShieldBlock.getZ());
+			
+			log.info(fshieldowner.toString());
 			
 			blockShieldBase.put(signBlock, shieldbase);
 			blockShieldBase.put(ShieldBlock, shieldbase);
@@ -107,18 +112,46 @@ public class ShieldListener implements Listener {
 		Block block = event.getBlock();
 		ShieldBase shieldBase = blockShieldBase.get(block);
 		if (shieldBase != null) {
-			Shield sheild = shieldBase.shield;
+			Shield shield = shieldBase.shield;
 			shieldBase.destroy();
 			blockShieldBase.remove(shieldBase.sponge);
 			blockShieldBase.remove(shieldBase.sign);
+			FactionShieldOwner fShieldOwner = new FactionShieldOwner(Board.getFactionAt(block));
+			shields.remove(fShieldOwner);
+			//blockShieldBase.remove(fShieldOwner);
 			
-			Faction faction = Board.getFactionAt(block.getLocation());
+			Faction faction = Board.getFactionAt(event.getBlock().getLocation());
 			faction.setPowerLoss(0);
 			
-			sheild.owner.sendMessage("Shield Destroyed!");
+			shield.owner.sendMessage("Shield Destroyed!");
 		}
 	}
 	
+	private void TNTBreakShield(Block targetloc, Block shieldblock)
+	{
+		//Block block = event.getBlock();
+		ShieldBase shieldBase = blockShieldBase.get(targetloc);
+		if (shieldBase != null) {
+			Shield shield = shieldBase.shield;
+			shieldBase.destroy();
+			blockShieldBase.remove(shieldBase.sponge);
+			blockShieldBase.remove(shieldBase.sign);
+			FactionShieldOwner fShieldOwner = new FactionShieldOwner(Board.getFactionAt(shieldblock));
+			shields.remove(fShieldOwner);
+			//blockShieldBase.remove(fShieldOwner);
+			
+			//signblock.breakNaturally();
+			//shieldblock.breakNaturally();
+			
+			shieldblock.getWorld().createExplosion(targetloc.getLocation(), 10, true);
+			
+			Faction faction = Board.getFactionAt(targetloc.getLocation());
+			faction.setPowerLoss(0);
+			
+			shield.owner.sendMessage("Shield Destroyed!");
+		}		
+	}
+
 	public Shield getShield(ShieldOwner owner) {
 		Shield shield = shields.get(owner);
 		if (shield == null) {
@@ -178,7 +211,7 @@ public class ShieldListener implements Listener {
 							    	return;
 							    }							    						   
 							    
-							    sh.get(player);
+							    //sh.get(player);
 							    
 							    FactionShieldOwner fSheildowner = new FactionShieldOwner(faction);
 
@@ -220,9 +253,8 @@ public class ShieldListener implements Listener {
 											// counter has reached max durability, so remove the
 											// block and drop an item
 											//log.info("Hit Max Shield Dura");
-											ShieldBlock.breakNaturally();
+											TNTBreakShield(targetLoc.getBlock(), ShieldBlock);
 											faction.setPowerLoss(0);
-											//RegenPowerLoss();
 											ResetTime(representation, targetLoc);
 											return;
 										} else {
@@ -238,8 +270,9 @@ public class ShieldListener implements Listener {
 										startNewTimer(representation);
 
 										if (checkIfMax(1)) {
-											ShieldBlock.breakNaturally();
-											faction.setPowerLoss(0);
+											//ShieldBlock.breakNaturally();
+											TNTBreakShield(targetLoc.getBlock(), ShieldBlock);
+											//faction.setPowerLoss(0);
 											//RegenPowerLoss();
 											ResetTime(representation, targetLoc);
 											//log.info("Hit Max");
@@ -259,7 +292,7 @@ public class ShieldListener implements Listener {
 			}
 		}
 	}
-	
+		
 	public void RegenPowerLoss()
 	{
 		Faction faction = new Faction();
@@ -348,6 +381,33 @@ public class ShieldListener implements Listener {
 		}
 
 		shieldTimer = map;
+	}
+
+	
+	public HashMap<ShieldOwner, Shield> getShields() {
+		// TODO Auto-generated method stub
+		return shields;
+	}
+	
+	public void setShields(HashMap<ShieldOwner, Shield> map) {
+		if (map == null) {
+			return;
+		}
+
+		shields = map;
+	}
+
+	public HashMap<Block, ShieldBase> getShieldsBase() {
+		// TODO Auto-generated method stub
+		return blockShieldBase;
+	}
+	
+	public void setShieldBase(HashMap<Block, ShieldBase> map) {
+		if (map == null) {
+			return;
+		}
+
+		blockShieldBase = map;
 	}
 
 }

@@ -1,14 +1,16 @@
 package net.sqdmc.factionshield;
 
-import net.minecraft.server.World;
+import java.io.Serializable;
 
-import org.bukkit.Location;
-import org.bukkit.event.Listener;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
 
-public class ShieldBase implements Listener {
+public class ShieldBase implements Serializable {
 
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
 	public final Block sponge;
 	public final Sign sign;
 	public final Shield shield;

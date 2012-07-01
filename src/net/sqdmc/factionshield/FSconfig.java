@@ -2,15 +2,28 @@ package net.sqdmc.factionshield;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
+import org.bukkit.block.Block;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
+
+import com.massivecraft.factions.Board;
+import com.massivecraft.factions.Faction;
 
 public class FSconfig {
 	private Logger log = Bukkit.getServer().getLogger();
@@ -22,7 +35,10 @@ public class FSconfig {
 	private static String directory = "plugins" + File.separator + FactionShield.getPluginName() + File.separator;
 	private File configFile = new File(directory + "config.yml");
 	private File durabilityFile = new File(directory + "durability.dat");
+	private File shieldsFile = new File(directory + "shields.yml");
+	private File shieldbaseFile = new File(directory + "shieldbase.yml");
 	private YamlConfiguration bukkitConfig = new YamlConfiguration();
+	private YamlConfiguration shieldsDB = new YamlConfiguration();
 	
 	/**
 	 * Default settings
@@ -167,7 +183,7 @@ public class FSconfig {
 			oos.flush();
 			oos.close();
 		} catch (IOException e) {
-			log.severe("Failed writing obsidian durability for " + FactionShield.getPluginName());
+			log.severe("Failed writing shields durability for " + FactionShield.getPluginName());
 			e.printStackTrace();
 		}
 	}
@@ -194,13 +210,211 @@ public class FSconfig {
 			map = (HashMap<Integer, Integer>) result;
 			ois.close();
 		} catch (IOException ioe) {
-			log.severe("Failed reading obsidian durability for " + FactionShield.getPluginName());
+			log.severe("Failed reading shields durability for " + FactionShield.getPluginName());
 			ioe.printStackTrace();
 		} catch (ClassNotFoundException cnfe) {
-			log.severe("Obsidian durability file contains an unknown class, was it modified?");
+			log.severe("Shields durability file contains an unknown class, was it modified?");
 			cnfe.printStackTrace();
 		}
 
 		return map;
 	}
+	
+	private void write2(String key, Object o, File file) {
+		try {
+			shieldsDB.load(file);
+			shieldsDB.set(key, o);
+			shieldsDB.save(file);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	// Saves to file
+	// This isn't working yet
+	public void saveShieldsToFile() {
+		if (plugin.getListener() == null || plugin.getListener().getShields() == null) {
+			return;
+		}
+		
+		if (!shieldsFile.exists())
+		{
+			try {
+				shieldsFile.createNewFile();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+			
+
+		HashMap<ShieldOwner, Shield> map = plugin.getListener().getShields();
+		
+	    final Iterator<Entry<ShieldOwner, Shield>> iter = map.entrySet().iterator();
+		 
+	    	    
+	    while (iter.hasNext()) {
+	        final Entry<ShieldOwner, Shield> entry = iter.next();
+	        final Object value = entry.getValue().owner.getFaction();
+	        final String key = entry.getKey().toString();
+	        write2(key, value, shieldsFile);
+	    }
+	    
+	}
+	
+	// Load from file
+	// things go horribly wrong...
+	@SuppressWarnings("unchecked")
+	public HashMap<ShieldOwner, Shield> loadShieldsFromFile() {
+		if (!shieldsFile.exists() || plugin.getListener() == null || plugin.getListener().getShields() == null) {
+			return null;
+		}
+
+		new File(directory).mkdir();
+
+		HashMap<ShieldOwner, Shield> map = null;
+		Object result = null;
+		
+		try {
+			shieldsDB.load(shieldsFile);
+			
+			if (shieldsDB.contains("net.sqdmc.factionshield"))
+			{
+			String result1 = shieldsDB.getString("net.sqdmc.factionshield");
+			
+			//Faction result2 = (Faction) shieldsDB.getList("net.sqdmc.factionshield." + result1 + ".owner");
+			
+			Faction faction = new Faction();
+			faction.getFaction(result1);
+			
+			FactionShieldOwner fShieldOwner = new FactionShieldOwner(faction);
+			
+			Shield shield = new Shield(fShieldOwner);
+			
+			log.info(result1);
+			log.info(fShieldOwner.getName());
+			
+			map.put(fShieldOwner, shield);
+			
+			return map;
+			}
+			//map = (HashMap<ShieldOwner, Shield>) result;
+			
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidConfigurationException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
+	
+	
+ 	
+	// Old method that attempted to save to .dat straight from the HashMaps
+	// Doesn't work do to non-serialable objects.
+	/*
+	public void saveShieldsToFile() {
+		if (plugin.getListener() == null || plugin.getListener().getShields() == null) {
+			return;
+		}
+
+		HashMap<ShieldOwner, Shield> map = plugin.getListener().getShields();
+		Object obj = map;
+
+		new File(directory).mkdir();
+
+		try {
+			ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(shieldsFile));
+			oos.writeObject(obj);
+			oos.flush();
+			oos.close();
+		} catch (IOException e) {
+			log.severe("Failed writing shields durability for " + FactionShield.getPluginName());
+			e.printStackTrace();
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	public HashMap<ShieldOwner, Shield> loadShieldsFromFile() {
+		if (!shieldsFile.exists() || plugin.getListener() == null || plugin.getListener().getShields() == null) {
+			return null;
+		}
+
+		new File(directory).mkdir();
+
+		HashMap<ShieldOwner, Shield> map = null;
+		Object result = null;
+
+		try {
+			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(shieldsFile));
+			result = ois.readObject();
+			map = (HashMap<ShieldOwner, Shield>) result;
+			ois.close();
+		} catch (IOException ioe) {
+			log.severe("Failed reading shields for " + FactionShield.getPluginName());
+			ioe.printStackTrace();
+		} catch (ClassNotFoundException cnfe) {
+			log.severe("Shields file contains an unknown class, was it modified?");
+			cnfe.printStackTrace();
+		}
+
+		return map;
+	}
+	
+	
+	
+	
+	public void saveShieldsBaseToFile() {
+		if (plugin.getListener() == null || plugin.getListener().getShields() == null) {
+			return;
+		}
+
+		HashMap<Block, ShieldBase> map = plugin.getListener().getShieldsBase();
+		Object obj = map;
+		
+		new File(directory).mkdir();
+
+		try {
+			ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(shieldbaseFile));
+			oos.writeObject(obj);
+			oos.flush();
+			oos.close();
+		} catch (IOException e) {
+			log.severe("Failed writing shields base for " + FactionShield.getPluginName());
+			e.printStackTrace();
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	public HashMap<Block, ShieldBase> loadShieldsBaseFromFile() {
+		if (!shieldbaseFile.exists() || plugin.getListener() == null || plugin.getListener().getShieldsBase() == null) {
+			return null;
+		}
+
+		new File(directory).mkdir();
+
+		HashMap<Block, ShieldBase> map = null;
+		Object result = null;
+
+		try {
+			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(shieldbaseFile));
+			result = ois.readObject();
+			map = (HashMap<Block, ShieldBase>) result;
+			ois.close();
+		} catch (IOException ioe) {
+			log.severe("Failed reading shields base for " + FactionShield.getPluginName());
+			ioe.printStackTrace();
+		} catch (ClassNotFoundException cnfe) {
+			log.severe("Shields base file contains an unknown class, was it modified?");
+			cnfe.printStackTrace();
+		}
+
+		return map;
+	}*/
 }

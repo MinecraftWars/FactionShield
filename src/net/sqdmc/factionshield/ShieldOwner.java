@@ -1,11 +1,11 @@
 package net.sqdmc.factionshield;
 
-import com.massivecraft.factions.FPlayer;
 import com.massivecraft.factions.Faction;
 
 abstract class ShieldOwner {
 	
-	abstract public String getId();
+	abstract public Faction getFaction();
+	abstract public String getName();
 		
 	/** Send message to the account holder. */
 	abstract public void sendMessage(String message);

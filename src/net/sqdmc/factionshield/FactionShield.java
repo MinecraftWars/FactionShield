@@ -27,12 +27,16 @@ public final class FactionShield extends JavaPlugin {
 		
 		config.loadConfig();
 		entityListener.setShieldDurability(config.loadDurabilityFromFile());
+		//entityListener.setShields(config.loadShieldsFromFile());
+		//entityListener.setShieldBase(config.loadShieldsBaseFromFile());
 		
 		getServer().getPluginManager().registerEvents(entityListener, this);
 	}
 	
 	public void onDisable(){
 		config.saveDurabilityToFile();
+		config.saveShieldsToFile();
+		//config.saveShieldsBaseToFile();
 		log.info(PLUGIN_NAME + " disabled");
 	}
 	
