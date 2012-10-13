@@ -23,6 +23,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
+
+import com.massivecraft.factions.FPlayers;
 import com.massivecraft.factions.Faction;
 import com.massivecraft.factions.FPlayer;
 import com.massivecraft.factions.Board;
@@ -68,8 +70,9 @@ public class ShieldListener implements Listener {
 		String shieldPower = line1;
 		if (line0.equalsIgnoreCase("[shield]") && (line1 != null && !line1.equals("") )) {		
 			fshieldowner = new FactionShieldOwner(faction);
-			event.setLine(1, player.getName());
-			event.setLine(2, faction.getTag());
+			//event.setLine(1, player.getName());
+			event.setLine(1, faction.getTag());
+			event.setLine(2, shieldPower);
 			event.setLine(3, shieldPower);
 		} else return; // not for us!
 		
@@ -120,6 +123,7 @@ public class ShieldListener implements Listener {
 			shield.setMaxShieldPower(Integer.parseInt(shieldPower));
 						
 			ShieldBase shieldbase = new ShieldBase(Sponge, signBlock, shield, ShieldBlock.getWorld(),ShieldBlock.getX(),ShieldBlock.getY(),ShieldBlock.getZ());
+			shieldbase.setShieldMaxPower( Integer.parseInt(shieldPower));
 			
 			log.info(fshieldowner.toString());
 			
@@ -247,14 +251,12 @@ public class ShieldListener implements Listener {
 								
 							    Sign s = (Sign) signBlock.getState();
 							    String shi = s.getLine(0);
-							    String p = s.getLine(1);
-							    //String fp = s.getLine(2);
+							    //String p = s.getLine(1);
+							    //String fp = s.getLine(1);
+							    int maxpower = Integer.parseInt(s.getLine(2));
 							    int pow = Integer.parseInt(s.getLine(3));
-							    
-							    Player player = null;
-							    player = Bukkit.getPlayerExact(p);
 
-							    if ((shi != "[shield]" || shi.replace(" ", "") != "[shield]") && player == null)
+							    if (!shi.equalsIgnoreCase("[shield]"))
 							    {
 							    	return;
 							    }							    						   
@@ -262,6 +264,8 @@ public class ShieldListener implements Listener {
 							    FactionShieldOwner fSheildowner = new FactionShieldOwner(faction);
 								Shield shield = new Shield(fSheildowner);
 								ShieldBase shieldBase = new ShieldBase(ShieldBlock, signBlock, shield, targetLoc.getWorld(), targetLoc.getBlockX(), targetLoc.getBlockY(), targetLoc.getBlockZ());
+								shieldBase.setShieldMaxPower(maxpower);
+								
 								
 								String shieldlocation = targetLoc.getWorld().getName() + "," + targetLoc.getBlockX() + "," + targetLoc.getBlockY() + "," + targetLoc.getBlockZ();
 								
@@ -300,13 +304,14 @@ public class ShieldListener implements Listener {
 											// counter has not reached max durability yet
 											ShieldDurability.put(representation, currentDurability);
 											//log.info("Set already, set Shield Dura");
-
-											startNewTimer(representation);
+											
+											startNewTimer(representation, shieldBase);
 										}
 									} else {
 										ShieldDurability.put(representation, 1);
 										//log.info("Set New Shield Dura");
-										startNewTimer(representation);
+										shieldBase.setShieldMaxPower(pow);
+										startNewTimer(representation, shieldBase);
 
 										if (checkIfMax(1)) {
 											TNTBreakShield(ShieldBlock);
@@ -340,7 +345,8 @@ public class ShieldListener implements Listener {
 	public void RegenPowerLoss(ShieldBase shieldBase)
 	{
 		if (shieldBase != null) {
-			int max = shieldBase.shield.getShieldPowerMax();
+			//int max = shieldBase.shield.getShieldPowerMax();
+			int max = shieldBase.getShieldMaxPower();
 		
 			shieldBase.shield.setShieldPower(max);
 			Sign sign = (Sign) shieldBase.sign.getState();
@@ -350,13 +356,13 @@ public class ShieldListener implements Listener {
 		}
 	}
 	
-	private void startNewTimer(Integer representation) {
+	private void startNewTimer(Integer representation, ShieldBase shieldbase) {
 		if (shieldTimer.get(representation) != null) {
 			shieldTimer.get(representation).cancel();
 		}
 
 		Timer timer = new Timer();
-		timer.schedule(new ShieldTimer(plugin, representation), config.getRegenTime());
+		timer.schedule(new ShieldTimer(plugin, representation, shieldbase), config.getRegenTime());
 
 		shieldTimer.put(representation, timer);
 	}

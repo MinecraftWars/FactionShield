@@ -21,6 +21,7 @@ public class ShieldBase implements Serializable {
 	public final Block sign;
 	public final Shield shield;
 	public final World world;
+	public int MaxPower;
 	public final int x;
 	public final int y;
 	public final int z;  
@@ -69,6 +70,16 @@ public class ShieldBase implements Serializable {
 	
 	public String getShieldBaseLoc() {
 		return world.getName() + "," + x  + "," + y + "," + z;
+	}
+	
+	public int getShieldMaxPower()
+	{
+		return this.MaxPower;
+	}
+	
+	public void setShieldMaxPower(int power)
+	{
+		this.MaxPower = power;
 	}
 
 	public void destroy() {

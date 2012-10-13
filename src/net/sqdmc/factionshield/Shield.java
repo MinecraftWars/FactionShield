@@ -45,7 +45,6 @@ public class Shield implements ConfigurationSerializable{
 		return ShieldPower;
 	}
 
-	
 	public void setShieldPower(int shieldpower)
 	{
 		this.ShieldPower = shieldpower;
