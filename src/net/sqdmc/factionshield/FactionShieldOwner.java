@@ -1,22 +1,33 @@
 package net.sqdmc.factionshield;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.bukkit.configuration.serialization.ConfigurationSerializable;
 import org.bukkit.entity.Player;
 
 import com.massivecraft.factions.Faction;
+import com.massivecraft.factions.Factions;
 
 import net.sqdmc.factionshield.ShieldOwner;
 
-public class FactionShieldOwner extends ShieldOwner {
+public class FactionShieldOwner extends ShieldOwner implements ConfigurationSerializable {
 
 	@Override
 	public Faction getFaction() {
-		return shieldOwner.getFaction();
+		return shieldOwner;
 	}
 	
 	@Override
-	public String getName() {
+	public String getId() {
 		// TODO Auto-generated method stub
-		return shieldOwner.getFaction().getId();
+		return shieldOwner.getId();
+	}
+	
+	public void setFaction(String Id){
+		Faction faction = Factions.i.get(Id);
+		
+		this.shieldOwner = faction;
 	}
 
 	@Override
@@ -51,5 +62,18 @@ public class FactionShieldOwner extends ShieldOwner {
 	public FactionShieldOwner(Faction factionId) {
 		this.shieldOwner = factionId;
 	}
+	
+	@Override
+	public String toString() {
+		return "shieldOwner";
+	}
 
+	@Override
+	public Map<String, Object> serialize() {
+		Map<String, Object> serial = new LinkedHashMap<String, Object>();
+		
+		serial.put("shieldOwner", this.shieldOwner);
+		
+		return serial;
+	}
 }

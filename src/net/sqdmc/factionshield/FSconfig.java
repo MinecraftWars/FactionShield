@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.Collection;
@@ -20,10 +21,12 @@ import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import com.massivecraft.factions.Board;
 import com.massivecraft.factions.Faction;
+import com.massivecraft.factions.Factions;
 
 public class FSconfig {
 	private Logger log = Bukkit.getServer().getLogger();
@@ -39,14 +42,20 @@ public class FSconfig {
 	private File shieldbaseFile = new File(directory + "shieldbase.yml");
 	private YamlConfiguration bukkitConfig = new YamlConfiguration();
 	private YamlConfiguration shieldsDB = new YamlConfiguration();
+	private YamlConfiguration shieldsBaseDB = new YamlConfiguration();
+	
+	private FileConfiguration shieldStorageConfig = null;
+	private File shieldStorageFile = null;
+	
+	private ShieldStorage storage = null;
 	
 	/**
 	 * Default settings
 	 */
 	private int ProtectionRadius = 16;
 	private long RegenTime = 60000L;
-	private int PowerCost = 5;
-	private int Durability = 20;
+	//private int MaxPowerCost = 100;
+	private int Durability = 100;
 	
 	public FSconfig(FactionShield plugin) {
 		this.plugin = plugin;
@@ -99,7 +108,7 @@ public class FSconfig {
 			
 			ProtectionRadius = bukkitConfig.getInt("ProtectionRadius.Distance", 16);
 			RegenTime = readLong("RegenTime.Time", "600000");
-			PowerCost = bukkitConfig.getInt("PowerCost.Amount", 5);
+			//MaxPowerCost = bukkitConfig.getInt("PowerCost.Amount", 5);
 			Durability = bukkitConfig.getInt("Durability.Amount", 20);
 
 		} catch (Exception e) {
@@ -112,7 +121,7 @@ public class FSconfig {
 		
 		write("ProtectionRadius.Distance", ProtectionRadius);
 		write("RegenTime.Time", RegenTime);
-		write("PowerCost.Amount", PowerCost);
+		//write("PowerCost.Amount", MaxPowerCost);
 		write("Durability.Amount", Durability);
 
 		loadData();
@@ -160,8 +169,8 @@ public class FSconfig {
 		return RegenTime;
 	}
 	
-	public int getPowerCost(){
-		return PowerCost;
+	public int getMaxPowerCost(){
+		return Durability;
 	}
 	
 	public int getDurability(){
@@ -231,6 +240,136 @@ public class FSconfig {
 		}
 	}
 	
+	private void write3(String key, Object o, File file) {
+		try {
+			shieldsBaseDB.load(file);
+			shieldsBaseDB.set(key, o);
+			shieldsBaseDB.save(file);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	
+	
+	public void deserialize() {
+		if(shieldStorageConfig == null) loadshieldStorage();
+		
+		//log.info(shieldStorageConfig.toString());
+		
+		log.info("[FactionShield] FactionShield: Storage config loaded successfully.");
+
+		try {
+			// Load our Storage class out of the config object
+			storage = (ShieldStorage)shieldStorageConfig.get("storage");
+		} catch (ClassCastException e) {
+			// Config didn't give us the correct class
+			log.info("[FactionShield] ShieldConfigr: Got an invalid class, expecting " + ShieldStorage.class.getName() + e);
+		}
+		if(storage == null) {
+			// If for some reason our storage class failed to deserialize,
+			// create a new blank one.
+			storage = new ShieldStorage();
+			log.warning("[FactionShield] ShieldConfigr: Failed to load from shields.yml, initialized new ShieldStorage!");	
+		}
+
+		else log.info("[FactionShield] ShieldConfigr: Successfully restored data.");
+
+	}
+	
+	
+	public void serialize() {
+		if(shieldStorageConfig == null) loadshieldStorage();
+		shieldStorageConfig.set("storage", storage);
+		saveShieldStorage();
+		log.info("[FactionShield] FactionShield: Successfully saved data.");
+	}
+	
+	private void loadshieldStorage() {
+		log.info("TEST");
+		if(shieldStorageFile == null) {
+			try{
+			log.info("Creating Shields File... " + directory);
+			shieldStorageFile = new File(directory, "shields.yml");
+			shieldStorageFile.createNewFile();
+			} catch (Exception e) {
+				log.info("Error: " + e.toString());
+			}
+			if(shieldStorageFile.exists()) {
+				try {
+					shieldStorageConfig = YamlConfiguration.loadConfiguration(shieldStorageFile);
+				} catch (Exception e) {
+					log.info("Internal error occurred while loading storage.yml, falling back to defaults" + e.toString());
+				    // Get default persistence file from the jar.
+				    InputStream defaultStorageStream = plugin.getResource("/shields.yml");
+				    if (defaultStorageStream != null) {
+				    	// Set default values (e.g. empty storage) if no storage exists yet.
+				    	shieldStorageConfig = YamlConfiguration.loadConfiguration(defaultStorageStream);
+				    } else {
+				    	shieldStorageConfig = new YamlConfiguration();
+				    }
+				}
+			}
+			else {
+				log.info("[FactionShield] No storage file exists, creating a new one.");
+				// Get default persistence file from the jar.
+			    InputStream defaultStorageStream = plugin.getResource("/shields.yml");
+			    if (defaultStorageStream != null) {
+			    	// Set default values (e.g. empty storage) if no storage exists yet.
+			    	shieldStorageConfig = YamlConfiguration.loadConfiguration(defaultStorageStream);
+			    } else {
+			    	shieldStorageConfig = new YamlConfiguration();
+			    }
+			}
+		}
+	}
+	
+	private void saveShieldStorage() {
+		if (shieldStorageConfig == null || shieldStorageConfig == null) {
+			// Don't save if there is nothing to save
+		    return;
+	    }
+
+		// Make a backup of the old storage file just in case
+		File backupFile = new File(directory, "shields.yml.old");
+		try {
+			// Create backup file if it doesn't exist (may throw IOException)
+			backupFile.createNewFile();
+
+			// Open files for reading/writing (may throw FileNotFoundException)
+			FileInputStream in = new FileInputStream(shieldStorageFile);
+			FileOutputStream out = new FileOutputStream(backupFile);
+
+			// Set up buffer
+			byte[] data = new byte[4096];
+			int bytes = 0;
+
+			// Copy data into backup file (may throw IOException)
+			while((bytes = in.read(data)) >= 0) {
+				out.write(data, 0, bytes);
+			}
+
+			// Close files (may throw IOException)
+			out.close();
+			in.close();
+		} catch(java.io.FileNotFoundException ex) {
+			log.warning("[FactionShield] FactionShield: Failed to back up shields.yml: File not found");
+		} catch (IOException e) {
+			log.warning("[FactionShield] FactionShield: Failed to back up shields.yml: Read or write error");
+		}
+
+	    try {
+	    	// Attempt to write changed config to disk
+	        shieldStorageConfig.save(shieldStorageFile);
+	    } catch (IOException ex) {
+	        log.info("Could not persist storage to " + shieldStorageFile + ex);
+	    }
+	}
+	
+	
+	
+	
 	// Saves to file
 	// This isn't working yet
 	public void saveShieldsToFile() {
@@ -247,15 +386,22 @@ public class FSconfig {
 			}
 		}
 			
-
-		HashMap<ShieldOwner, Shield> map = plugin.getListener().getShields();
 		
+		try {
+			shieldsDB.save(shieldsFile);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		HashMap<ShieldOwner, Shield> map = plugin.getListener().getShields();
+
 	    final Iterator<Entry<ShieldOwner, Shield>> iter = map.entrySet().iterator();
-		 
-	    	    
+
+
 	    while (iter.hasNext()) {
 	        final Entry<ShieldOwner, Shield> entry = iter.next();
-	        final Object value = entry.getValue().owner.getFaction();
+	        final Object value = entry.getValue().owner.getId();
 	        final String key = entry.getKey().toString();
 	        write2(key, value, shieldsFile);
 	    }
@@ -269,31 +415,46 @@ public class FSconfig {
 		if (!shieldsFile.exists() || plugin.getListener() == null || plugin.getListener().getShields() == null) {
 			return null;
 		}
-
+		
+		//if (directory.)
 		new File(directory).mkdir();
 
-		HashMap<ShieldOwner, Shield> map = null;
+		HashMap<ShieldOwner, Shield> map = new HashMap<ShieldOwner, Shield>();
 		Object result = null;
 		
 		try {
 			shieldsDB.load(shieldsFile);
 			
-			if (shieldsDB.contains("net.sqdmc.factionshield"))
+			if (shieldsDB.contains("shieldOwner"))
 			{
-			String result1 = shieldsDB.getString("net.sqdmc.factionshield");
+			String result1 = shieldsDB.getString("shieldOwner", "0");
 			
 			//Faction result2 = (Faction) shieldsDB.getList("net.sqdmc.factionshield." + result1 + ".owner");
+			log.info(result1);
 			
-			Faction faction = new Faction();
-			faction.getFaction(result1);
+			
+			Factions factions = Factions.i;
+			
+			if (!factions.exists(result1)){
+				log.info("Faction doesn't exisit!");
+				return null;
+			}
+			
+			Faction faction = factions.get(result1);
 			
 			FactionShieldOwner fShieldOwner = new FactionShieldOwner(faction);
+			//ShieldBase shieldbase = new ShieldBase();
 			
 			Shield shield = new Shield(fShieldOwner);
 			
-			log.info(result1);
-			log.info(fShieldOwner.getName());
-			
+			shield.setShieldPower(100);
+			shield.setMaxShieldPower(100);
+			//ShieldBase shieldbase = new ShieldBase(null, null, shield, null, Durability, Durability, Durability);
+		
+			//log.info(fShieldOwner.getId());
+			//log.info(fShieldOwner.toString());
+			//log.info(shield.getOwner().toString());
+		
 			map.put(fShieldOwner, shield);
 			
 			return map;
@@ -312,6 +473,80 @@ public class FSconfig {
 		}
 		return null;
 	}
+	
+	
+	
+	
+	
+	
+	public void saveShieldsBaseToFile() {
+		if (plugin.getListener() == null || plugin.getListener().getShields() == null) {
+			return;
+		}
+		
+		if (!shieldbaseFile.exists())
+		{
+			try {
+				shieldbaseFile.createNewFile();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+
+		HashMap<Block, ShieldBase> map = plugin.getListener().getShieldsBase();
+		Object obj = map;
+		
+		
+		new File(directory).mkdir();
+
+	    final Iterator<Entry<Block, ShieldBase>> iter = map.entrySet().iterator();
+
+
+	    while (iter.hasNext()) {
+	        final Entry<Block, ShieldBase> entry = iter.next();
+	        final Object value = entry.getValue().getShieldBaseLoc();
+	        final String key = entry.getValue().getShieldBase().toString();
+	        write3(key, value, shieldbaseFile);
+	    }
+		
+		
+		
+	}
+
+	@SuppressWarnings("unchecked")
+	public HashMap<Block, ShieldBase> loadShieldsBaseFromFile() {
+		if (!shieldbaseFile.exists() || plugin.getListener() == null || plugin.getListener().getShieldsBase() == null) {
+			return null;
+		}
+
+		new File(directory).mkdir();
+
+		HashMap<Block, ShieldBase> map = null;
+		ConfigurationSection shield = null;
+		Map shieldvalues;
+		String locationstring = null;
+		int x;
+		int y;
+		int z;
+
+		//shieldsBaseDB.
+		shield = shieldsBaseDB.getConfigurationSection("Shield");
+		shieldvalues = shield.getValues(true);
+		
+		
+		
+		//shieldvalues.get());
+		
+		
+		log.info(shieldvalues.toString());
+		//log.info(world);
+		
+
+		return map;	
+	}
+	
+	
+	
 	
 	
 	

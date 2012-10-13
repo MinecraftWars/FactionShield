@@ -1,5 +1,7 @@
 package net.sqdmc.factionshield;
 
+import java.text.NumberFormat;
+import java.text.ParsePosition;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
@@ -34,39 +36,58 @@ public class ShieldListener implements Listener {
 	private FSconfig config;
 	
 	private Logger log = Bukkit.getServer().getLogger();
+	private ShieldStorage shieldstorage;
+	
+	//private HashMap<ShieldOwner, Shield> shields = new HashMap<ShieldOwner, Shield>();
+	//private HashMap<Block, ShieldBase> blockShieldBase = new HashMap<Block, ShieldBase>();
 	
 	private HashMap<Integer, Integer> ShieldDurability = new HashMap<Integer, Integer>();
 	private HashMap<Integer, Timer> shieldTimer = new HashMap<Integer, Timer>();
 	
-	private HashMap<ShieldOwner, Shield> shields = new HashMap<ShieldOwner, Shield>();
-	private HashMap<Block, ShieldBase> blockShieldBase = new HashMap<Block, ShieldBase>();
 	//private Map<Shield, ShieldOwner> sh = new HashMap<Shield, ShieldOwner>();
 	
 	public ShieldListener(FactionShield plugin) {
 		this.plugin = plugin;
 		config = plugin.getFSconfig();
+		if (shieldstorage != null)
+		{
+			//config.deserialize();
+		}
+		else
+		{
+			shieldstorage = new ShieldStorage();
+			//config.deserialize();
+		}
 	}
 	
 	@EventHandler
 	public void createShield(SignChangeEvent event) {
 		Player player = event.getPlayer();
 		Faction faction = Board.getFactionAt(event.getBlock().getLocation());
-		FPlayer fPlayer = new FPlayer();
+		//FPlayer fPlayer = new FPlayer();
 					
 		FactionShieldOwner fshieldowner;
 		
 		String line0 = event.getLine(0);
-		if (line0.equals("[shield]")) {
+		String line3 = event.getLine(3);
+		if (line0.equalsIgnoreCase("[shield]") && line3 != null && !line3.equals("")) {		
 			fshieldowner = new FactionShieldOwner(faction);
 			event.setLine(1, player.getName());
 			event.setLine(2, faction.getTag());
 		} else return; // not for us!
-
+		
 		Block signBlock = event.getBlock();
 		Block ShieldBlock = signBlock.getRelative(BlockFace.DOWN);
 		
-		if (faction.getId().equals("-2") || faction.getId().equals("-1")  || faction.getId().equals("0") )
-		{
+		if (!isNumeric(line3)) {
+			signBlock.breakNaturally();
+			return;
+		}
+		if (Integer.parseInt(line3) < 1) {
+			signBlock.breakNaturally();
+			return;
+		}
+		if (faction.getId().equals("-2") || faction.getId().equals("-1")  || faction.getId().equals("0") ) {
 			signBlock.breakNaturally();
 			return;
 		}
@@ -75,9 +96,18 @@ public class ShieldListener implements Listener {
 			
 			Block Sponge = (Block)ShieldBlock;	
 			
-			if (blockShieldBase != null){
+			if (Integer.parseInt(line3) > config.getMaxPowerCost() || Integer.parseInt(line3) > faction.getPower())
+			{
+				log.info("Not enough power to create Shield for player "+ player.getName());
+				fshieldowner.sendMessage("Not enough power to create Shield!");
+				signBlock.breakNaturally();
+				Sponge.breakNaturally();
+				return;			
+			}
+			
+			if (shieldstorage.getBlockShieldBase() != null){
 				//if (shield.getOwner().getId() == shields.get(fshieldowner).owner.getId()){
-				if (shields.containsKey(fshieldowner)){
+				if (shieldstorage.getShields().containsKey(fshieldowner)){
 				//if (shields.equals(fshieldowner))
 					log.info("Already have a shield");
 					Sponge.breakNaturally();
@@ -86,15 +116,21 @@ public class ShieldListener implements Listener {
 			}
 			
 			Shield shield = getShield(fshieldowner);
+			
+			shield.setShieldPower(Integer.parseInt(line3));
+			shield.setMaxShieldPower(Integer.parseInt(line3));
 						
-			ShieldBase shieldbase = new ShieldBase(Sponge, (Sign)signBlock.getState(), shield, ShieldBlock.getWorld(),ShieldBlock.getX(),ShieldBlock.getY(),ShieldBlock.getZ());
+			ShieldBase shieldbase = new ShieldBase(Sponge, signBlock, shield, ShieldBlock.getWorld(),ShieldBlock.getX(),ShieldBlock.getY(),ShieldBlock.getZ());
 			
 			log.info(fshieldowner.toString());
 			
-			blockShieldBase.put(signBlock, shieldbase);
-			blockShieldBase.put(ShieldBlock, shieldbase);
+			shieldstorage.addBlockShieldBase(signBlock, shieldbase);
+			shieldstorage.addBlockShieldBase(ShieldBlock, shieldbase);
 			
-			faction.setPowerLoss(-config.getPowerCost());
+			//blockShieldBase.put(signBlock, shieldbase);
+			//blockShieldBase.put(ShieldBlock, shieldbase);
+			
+			faction.setPowerLoss(-Integer.parseInt(line3));
 			
 			/*Integer representation = ShieldBlock.getWorld().hashCode() + ShieldBlock.getX() * 2389 + ShieldBlock.getY() * 4027 + ShieldBlock.getZ() * 2053;						
 			
@@ -110,14 +146,18 @@ public class ShieldListener implements Listener {
 	@EventHandler
 	public void shieldBroken(BlockBreakEvent event) {
 		Block block = event.getBlock();
-		ShieldBase shieldBase = blockShieldBase.get(block);
+		ShieldBase shieldBase = shieldstorage.getBlockShieldBase().get(block);
 		if (shieldBase != null) {
 			Shield shield = shieldBase.shield;
 			shieldBase.destroy();
-			blockShieldBase.remove(shieldBase.sponge);
-			blockShieldBase.remove(shieldBase.sign);
 			FactionShieldOwner fShieldOwner = new FactionShieldOwner(Board.getFactionAt(block));
-			shields.remove(fShieldOwner);
+			shieldstorage.removeShields(fShieldOwner);
+			shieldstorage.removeBlockShieldBase(shieldBase.sponge);
+			shieldstorage.removeBlockShieldBase(shieldBase.sign);
+			
+			//blockShieldBase.remove(shieldBase.sponge);
+			//blockShieldBase.remove(shieldBase.sign);
+			//shields.remove(fShieldOwner);
 			//blockShieldBase.remove(fShieldOwner);
 			
 			Faction faction = Board.getFactionAt(event.getBlock().getLocation());
@@ -127,36 +167,45 @@ public class ShieldListener implements Listener {
 		}
 	}
 	
-	private void TNTBreakShield(Block targetloc, Block shieldblock)
+	private void TNTBreakShield(Block shieldblock)
 	{
 		//Block block = event.getBlock();
-		ShieldBase shieldBase = blockShieldBase.get(targetloc);
+		//ShieldBase shieldBase = blockShieldBase.get(targetloc);
+		ShieldBase shieldBase = shieldstorage.getBlockShieldBase().get(shieldblock);	
 		if (shieldBase != null) {
 			Shield shield = shieldBase.shield;
-			shieldBase.destroy();
-			blockShieldBase.remove(shieldBase.sponge);
-			blockShieldBase.remove(shieldBase.sign);
 			FactionShieldOwner fShieldOwner = new FactionShieldOwner(Board.getFactionAt(shieldblock));
-			shields.remove(fShieldOwner);
-			//blockShieldBase.remove(fShieldOwner);
+			shieldstorage.removeShields(fShieldOwner);
+			shieldstorage.removeBlockShieldBase(shieldBase.sponge);
+			shieldstorage.removeBlockShieldBase(shieldBase.sign);
+			//shieldBase.destroy();
 			
-			//signblock.breakNaturally();
-			//shieldblock.breakNaturally();
+			int explosionpower = Math.round(shieldBase.shield.getShieldPowerMax() / 4);
+			log.info("Explosion Power: " + explosionpower + "  MaxShield: " + shieldBase.shield.getShieldPowerMax());
 			
-			shieldblock.getWorld().createExplosion(targetloc.getLocation(), 10, true);
+			if (explosionpower >= 11)
+				explosionpower = 11;
+			else if (explosionpower <= 2)
+				explosionpower = 2;
 			
-			Faction faction = Board.getFactionAt(targetloc.getLocation());
-			faction.setPowerLoss(0);
+			shieldblock.getWorld().createExplosion(shieldblock.getLocation(), explosionpower, true);
+			log.info("Explosion Power: " + explosionpower);
+			shieldblock.breakNaturally();
 			
+			Faction faction = Board.getFactionAt(shieldblock);
 			shield.owner.sendMessage("Shield Destroyed!");
+			
+			faction.setPowerLoss(0);
 		}		
 	}
 
 	public Shield getShield(ShieldOwner owner) {
-		Shield shield = shields.get(owner);
+		Shield shield = shieldstorage.getShields().get(owner);
 		if (shield == null) {
 			shield =  new Shield(owner);
-			shields.put(owner,shield);
+			//shield.setShieldPower(100);
+			//shield.setMaxShieldPower(100);
+			shieldstorage.addShield(owner,shield);
 		}
 		
 		return shield;
@@ -169,27 +218,38 @@ public class ShieldListener implements Listener {
 			return;
 		}
 
+		
 		final int radius = config.getProtRadius();
 		
 		final Entity detonator = event.getEntity();
+		final Location detonatorLoc;
 
 		if (detonator == null) {
+			log.info("Det Null!");
+			detonatorLoc = event.getLocation();
 			return;
 		}
-		
-		final Location detonatorLoc = detonator.getLocation();
+		else {	
+			detonatorLoc = detonator.getLocation();
+		}
 			
 		// calculate sphere around detonator
 		for (int x = -radius; x <= radius; x++) {
 			for (int y = -radius; y <= radius; y++) {
 				for (int z = -radius; z <= radius; z++) {
-					Location targetLoc = new Location(detonator.getWorld(), detonatorLoc.getX() + x, detonatorLoc.getY() + y, detonatorLoc.getZ() + z);
+					Location targetLoc;
+					if (detonator != null) {
+						targetLoc = new Location(detonator.getWorld(), detonatorLoc.getX() + x, detonatorLoc.getY() + y, detonatorLoc.getZ() + z);
+					}
+					else {
+						targetLoc = new Location(event.getLocation().getWorld(), event.getLocation().getX() + x, event.getLocation().getY() + y, event.getLocation().getZ() + z);
+					}
 
 					if (detonatorLoc.distance(targetLoc) <= radius) {				
 						
 						Block signBlock = targetLoc.getBlock();
 						if (signBlock.getType() == Material.SIGN || signBlock.getType() == Material.SIGN_POST){
-							log.info("TNT Exploded");
+							//log.info("TNT Exploded");
 							
 							Block ShieldBlock = signBlock.getRelative(BlockFace.DOWN);
 							if (ShieldBlock.getType() == Material.SPONGE) {
@@ -202,6 +262,7 @@ public class ShieldListener implements Listener {
 							    String shi = s.getLine(0);
 							    String p = s.getLine(1);
 							    String fp = s.getLine(2);
+							    int pow = Integer.parseInt(s.getLine(3));
 							    
 							    Player player = null;
 							    player = Bukkit.getPlayerExact(p);
@@ -217,32 +278,32 @@ public class ShieldListener implements Listener {
 
 								Shield shield = new Shield(fSheildowner);
 								
-								ShieldBase shieldBase = new ShieldBase(ShieldBlock, s, shield, targetLoc.getWorld(), targetLoc.getBlockX(), targetLoc.getBlockY(), targetLoc.getBlockZ());
+								//shield.setMaxShieldPower(pow);
+								
+								ShieldBase shieldBase = new ShieldBase(ShieldBlock, signBlock, shield, targetLoc.getWorld(), targetLoc.getBlockX(), targetLoc.getBlockY(), targetLoc.getBlockZ());
 																
 								
-								String shieldlocation = targetLoc.getWorld() + "," + targetLoc.getBlockX() + "," + targetLoc.getBlockY() + "," + targetLoc.getBlockZ();
-
-								//log.info(shieldBase.getShieldBaseLoc());
-								//log.info(shieldlocation);
+								String shieldlocation = targetLoc.getWorld().getName() + "," + targetLoc.getBlockX() + "," + targetLoc.getBlockY() + "," + targetLoc.getBlockZ();
 								
 								if (shieldBase.getShieldBaseLoc().equals(shieldlocation))
 								{					
 									Integer representation = targetLoc.getWorld().hashCode() + targetLoc.getBlockX() * 2389 + targetLoc.getBlockY() * 4027 + targetLoc.getBlockZ() * 2053;						
 									
-									//log.info(representation.toString());
+									pow--;
+									shield.setShieldPower(pow);
 									
-									double fPower = faction.getPower();
-									//double fPowerMax = faction.getPowerMax();
-									double fLandPower = faction.getLandRounded();
-								
-									double loss = faction.getPowerLoss();	
-									if (fPower > fLandPower)
-										loss -= 1;
+									if (pow <= 0)
+										TNTBreakShield(ShieldBlock);
+									
+									if (pow > 0){
+										String newpower = String.valueOf(pow);
+										s.setLine(3, newpower);
+										s.update();
+										shield.owner.sendMessage("Shield Power at " + newpower + "!");
+									}
 									else
-										ShieldBlock.breakNaturally();
+										TNTBreakShield(ShieldBlock);
 										
-									faction.setPowerLoss(loss);
-									
 									
 									if (ShieldDurability.containsKey(representation)) {
 
@@ -250,10 +311,9 @@ public class ShieldListener implements Listener {
 										currentDurability++;
 										
 										if (checkIfMax(currentDurability)) {
-											// counter has reached max durability, so remove the
-											// block and drop an item
+											// counter has reached max durability
 											//log.info("Hit Max Shield Dura");
-											TNTBreakShield(targetLoc.getBlock(), ShieldBlock);
+											TNTBreakShield(ShieldBlock);
 											faction.setPowerLoss(0);
 											ResetTime(representation, targetLoc);
 											return;
@@ -270,10 +330,8 @@ public class ShieldListener implements Listener {
 										startNewTimer(representation);
 
 										if (checkIfMax(1)) {
-											//ShieldBlock.breakNaturally();
-											TNTBreakShield(targetLoc.getBlock(), ShieldBlock);
+											TNTBreakShield(ShieldBlock);
 											//faction.setPowerLoss(0);
-											//RegenPowerLoss();
 											ResetTime(representation, targetLoc);
 											//log.info("Hit Max");
 										}
@@ -292,23 +350,26 @@ public class ShieldListener implements Listener {
 			}
 		}
 	}
-		
-	public void RegenPowerLoss()
+	
+	public static boolean isNumeric(String str)
 	{
-		Faction faction = new Faction();
+	  NumberFormat formatter = NumberFormat.getInstance();
+	  ParsePosition pos = new ParsePosition(0);
+	  formatter.parse(str, pos);
+	  return str.length() == pos.getIndex();
+	}
 		
-		double fPower = faction.getPower();
-		double fPowerMax = faction.getPowerMax();
-		//double fLandPower = faction.getLandRounded();
+	public void RegenPowerLoss(ShieldBase shieldBase)
+	{
+		if (shieldBase != null) {
+			int max = shieldBase.shield.getShieldPowerMax();
 		
-		double loss = faction.getPowerLoss();	
-		
-		//if (loss < 0 && fPower < fPowerMax)
-			//loss += 1;
-		
-		loss = 0;
-		
-		faction.setPowerLoss(loss);
+			shieldBase.shield.setShieldPower(max);
+			Sign sign = (Sign) shieldBase.sign.getState();
+			String newpower = String.valueOf(max);	
+			sign.setLine(3, newpower);
+			sign.update();
+		}
 	}
 	
 	private void startNewTimer(Integer representation) {
@@ -386,20 +447,22 @@ public class ShieldListener implements Listener {
 	
 	public HashMap<ShieldOwner, Shield> getShields() {
 		// TODO Auto-generated method stub
-		return shields;
+		return shieldstorage.getShields();
 	}
 	
 	public void setShields(HashMap<ShieldOwner, Shield> map) {
 		if (map == null) {
 			return;
 		}
+		
+		shieldstorage.setShields(map);
 
-		shields = map;
+		//shields = map;
 	}
 
 	public HashMap<Block, ShieldBase> getShieldsBase() {
 		// TODO Auto-generated method stub
-		return blockShieldBase;
+		return shieldstorage.getBlockShieldBase();
 	}
 	
 	public void setShieldBase(HashMap<Block, ShieldBase> map) {
@@ -407,7 +470,8 @@ public class ShieldListener implements Listener {
 			return;
 		}
 
-		blockShieldBase = map;
+		shieldstorage.setBlockShieldBase(map);
+		//blockShieldBase = map;
 	}
 
 }

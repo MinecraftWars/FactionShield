@@ -35,8 +35,10 @@ public final class FactionShield extends JavaPlugin {
 	
 	public void onDisable(){
 		config.saveDurabilityToFile();
-		config.saveShieldsToFile();
+		//config.saveShieldsToFile();
 		//config.saveShieldsBaseToFile();
+		//config.serialize();
+		
 		log.info(PLUGIN_NAME + " disabled");
 	}
 	

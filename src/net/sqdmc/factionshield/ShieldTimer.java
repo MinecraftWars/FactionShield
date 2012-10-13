@@ -5,6 +5,7 @@ import java.util.TimerTask;
 import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
+import org.bukkit.block.Block;
 
 public final class ShieldTimer extends TimerTask {
 	
@@ -34,12 +35,15 @@ public final class ShieldTimer extends TimerTask {
 		//log.info(plugin.getListener().toString());
 		//log.info(plugin.getListener().getShieldDurability().toString());
 		HashMap<Integer, Integer> map = plugin.getListener().getShieldDurability();
+		HashMap<Block, ShieldBase> shieldBases = plugin.getListener().getShieldsBase();
 		
 		if (map == null) {
 			return;
 		}
 		
-		//plugin.getListener().RegenPowerLoss();
+		ShieldBase shieldbase = shieldBases.get(id);
+		
+		plugin.getListener().RegenPowerLoss(shieldbase);
 		
 		map.remove(id);
 	}
