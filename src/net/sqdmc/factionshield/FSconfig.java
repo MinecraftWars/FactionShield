@@ -54,7 +54,6 @@ public class FSconfig {
 	 */
 	private int ProtectionRadius = 16;
 	private long RegenTime = 60000L;
-	//private int MaxPowerCost = 100;
 	private int Durability = 100;
 	
 	public FSconfig(FactionShield plugin) {
@@ -108,7 +107,6 @@ public class FSconfig {
 			
 			ProtectionRadius = bukkitConfig.getInt("ProtectionRadius.Distance", 16);
 			RegenTime = readLong("RegenTime.Time", "600000");
-			//MaxPowerCost = bukkitConfig.getInt("PowerCost.Amount", 5);
 			Durability = bukkitConfig.getInt("Durability.Amount", 20);
 
 		} catch (Exception e) {
@@ -121,7 +119,6 @@ public class FSconfig {
 		
 		write("ProtectionRadius.Distance", ProtectionRadius);
 		write("RegenTime.Time", RegenTime);
-		//write("PowerCost.Amount", MaxPowerCost);
 		write("Durability.Amount", Durability);
 
 		loadData();
