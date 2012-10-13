@@ -78,14 +78,17 @@ public class ShieldListener implements Listener {
 		
 		if (!isNumeric(shieldPower)) {
 			signBlock.breakNaturally();
+			fshieldowner.sendMessage("Shield Power must be a number on the second line.");
 			return;
 		}
 		if (Integer.parseInt(shieldPower) < 1) {
 			signBlock.breakNaturally();
+			fshieldowner.sendMessage("Shield must have a power of greater than zero.");
 			return;
 		}
 		if (faction.getId().equals("-2") || faction.getId().equals("-1")  || faction.getId().equals("0") ) {
 			signBlock.breakNaturally();
+			fshieldowner.sendMessage("You can only create Shields in land you own.");
 			return;
 		}
 		
@@ -105,6 +108,7 @@ public class ShieldListener implements Listener {
 			if (shieldstorage.getBlockShieldBase() != null){
 				if (shieldstorage.getShields().containsKey(fshieldowner)){
 					log.info("Already have a shield");
+					fshieldowner.sendMessage("You already have a Shield.");
 					Sponge.breakNaturally();
 					return;
 				}
